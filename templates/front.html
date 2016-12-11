@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="initial-scale=1.0">
+    <title>Pending Requests</title>
+    <style>
+        /* Always set the map height explicitly to define the size of the div
+         * element that contains the map. */
+        #map {
+            height: 40%;
+        }
+
+        /* Optional: Makes the sample page fill the window. */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAysd2yJROGNUyBFzoFc5ZIQnW9XLgGYhc&callback=initMap"
+        async defer></script>
+
+<script>
+    var map;
+    var locations = [
+    {% for i in all_data %}
+    ['{{i.name}}', {{i.latitude}},{{i.longitude}}],
+    {% endfor %} ];
+
+    function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: {lat: 13.11083, lng: 80.26087},
+            zoom: 5
+        });
+        var infowindow = new google.maps.InfoWindow();
+
+        var marker, i;
+
+        for (i = 0; i < locations.length; i++) {
+            marker = new google.maps.Marker({
+                position: new google.maps.LatLng(locations[i][1], locations[i][2]),
+                map: map
+            });
+
+            google.maps.event.addListener(marker, 'click', (function (marker, i) {
+                return function () {
+                    infowindow.setContent(locations[i][0]);
+                    infowindow.open(map, marker);
+                }
+            })(marker, i));
+        }
+    }
+</script>
+<h1>PENDING REQUESTS</h1>
+<hr>
+<br>
+
+<form method="post">
+    <label>
+        Search
+        <input type="text" name="search">
+    </label>
+    <input type="submit">
+    <hr>
+</form>
+{%for i in all_data%}
+{%if i.pending == "1"%}
+<h3>{{i.type}}</h3>
+<ul>
+    <li>
+        <h4>NAME: {{i.name}}</h4>
+    </li>
+    <li>
+        <h4>NUMBER OF INJURED PEOPLE: {{i.injured}}</h4>
+    </li>
+    <li>
+        <h4>PHONE 1: {{i.phone}}</h4>
+    </li>
+    <li>
+        <h4>PHONE 2: {{i.sms_number}}</h4>
+    </li>
+    <li>
+        <h4>ADDRESS: {{i.address}}</h4>
+    </li>
+    <li>
+        <h4><a href="http://maps.google.com/maps?q=loc:{{i.latitude}},{{i.longitude}}">LOCATE ON MAP</a></h4>
+    </li>
+    <li>
+        <h4>DATE TIME (YYYY-MM-DD HH:MM:SS): {{i.date}}</h4>
+    </li>
+    <li>
+        <h4><a href="https://backend-108.appspot.com/registeredplaces?lat={{i.latitude}}&lng={{i.longitude}}">NEARBY
+            REGISTERED AMBULANCES</a></h4>
+    </li>
+    <li>
+        <h4>
+            <a href="https://backend-108.appspot.com/searchnearby?lat={{i.latitude}}&lng={{i.longitude}}&type={{i.type}}">SEARCH
+                NEARBY PLACES</a></h4>
+    </li>
+</ul>
+<hr>
+{%endif%}
+{%endfor%}
+
+</body>
+</html>

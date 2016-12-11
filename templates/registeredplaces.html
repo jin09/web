@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="initial-scale=1.0">
+    <title>Registered Places</title>
+    <style>
+        /* Center the loader */
+
+        #loader {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            z-index: 1;
+            width: 150px;
+            height: 150px;
+            margin: -75px 0 0 -75px;
+            border: 16px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 16px solid #3498db;
+            width: 120px;
+            height: 120px;
+            -webkit-animation: spin 2s linear infinite;
+            animation: spin 2s linear infinite;
+        }
+
+        @-webkit-keyframes spin {
+            0% {
+                -webkit-transform: rotate(0deg);
+            }
+            100% {
+                -webkit-transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Add animation to "page content" */
+        .animate-bottom {
+            position: relative;
+            -webkit-animation-name: animatebottom;
+            -webkit-animation-duration: 1s;
+            animation-name: animatebottom;
+            animation-duration: 1s
+        }
+
+        @-webkit-keyframes animatebottom {
+            from {
+                bottom: -100px;
+                opacity: 0
+            }
+            to {
+                bottom: 0px;
+                opacity: 1
+            }
+        }
+
+        @keyframes animatebottom {
+            from {
+                bottom: -100px;
+                opacity: 0
+            }
+            to {
+                bottom: 0;
+                opacity: 1
+            }
+        }
+
+        #map {
+            height: 40%;
+        }
+
+        /* Optional: Makes the sample page fill the window. */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+<h1>NEARBY REGISTERED AMBULANCES</h1>
+<hr>
+<div id="map"></div>
+
+<br>
+
+<div id="loader"></div>
+<div id="body"></div>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAysd2yJROGNUyBFzoFc5ZIQnW9XLgGYhc&callback=initMap"
+        async defer></script>
+<script>
+    function getParameterByName(name, url) {
+        if (!url) {
+            url = window.location.href;
+        }
+        name = name.replace(/[\[\]]/g, "\\$&");
+        var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+                results = regex.exec(url);
+        if (!results) return null;
+        if (!results[2]) return '';
+        return decodeURIComponent(results[2].replace(/\+/g, " "));
+    }
+    var lat = getParameterByName("lat");
+    var lng = getParameterByName("lng");
+    var map;
+    function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: {lat: 13.11083, lng: 80.26087},
+            zoom: 3
+        });
+    }
+
+    // create a new request
+    var request = new XMLHttpRequest();
+
+    //capture the response of the variable
+    request.onreadystatechange = function () {
+        if (request.readyState === XMLHttpRequest.DONE) {
+            if (request.status === 200) {
+                var text = request.responseText;
+                var json = JSON.parse(text);
+                var q = json.results;
+                var output = "";
+                var locations = [];
+                for (var i = 0; i < q.length; i++) {
+                    var locationsInner = [];
+                    locationsInner[0] = q[i].name;
+                    locationsInner[1] = q[i].lat;
+                    locationsInner[2] = q[i].lng;
+                    locations.push(locationsInner);
+                    var inner = "<h3>" + q[i].name + "</h3>" +
+                            "<ul>" +
+                            "<li>" + "<b>" + "SHORTEST TIME: " + q[i].text + "</b>" + "</li>" +
+                            "<li>" + "ADDRESS: " + q[i].addr + "</li>" +
+                            "</ul>" + "<hr>";
+                    output += inner;
+                }
+                document.getElementById("loader").style.display = "none";
+                document.getElementById("body").innerHTML = output;
+                createMarkers(locations);
+            }
+            else {
+                alert('There was a problem with the request.');
+            }
+        }
+    };
+
+    function createMarkers(locations){
+
+        var infowindow = new google.maps.InfoWindow();
+
+        var marker, i;
+
+        for (i = 0; i < locations.length; i++) {
+            marker = new google.maps.Marker({
+                position: new google.maps.LatLng(locations[i][1], locations[i][2]),
+                map: map,
+                icon: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+            });
+
+            google.maps.event.addListener(marker, 'click', (function (marker, i) {
+                return function () {
+                    infowindow.setContent(locations[i][0]);
+                    infowindow.open(map, marker);
+                }
+            })(marker, i));
+        }
+        marker = new google.maps.Marker({
+                position: new google.maps.LatLng(lat, lng),
+                map: map,
+                icon: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
+            });
+        google.maps.event.addListener(marker, 'click', (function (marker) {
+                return function () {
+                    infowindow.setContent("victim");
+                    infowindow.open(map, marker);
+                }
+            })(marker));
+    }
+
+    //Make a request
+    var url = "https://backend-108.appspot.com/registeredplacescompute?lat=" + lat + "&lng=" + lng;
+    request.open('GET', url);
+    request.send();
+
+</script>
+</body>
+</html>
