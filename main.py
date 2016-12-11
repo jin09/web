@@ -14,10 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+import hashlib
+import hmac
 import json
 import logging
+import random
+import string
 import urllib2
+import re
 import requests
 import webapp2
 import jinja2
@@ -35,8 +39,41 @@ requests_toolbelt.adapters.appengine.monkeypatch()
 jinja_env = jinja2.Environment(autoescape=True,
                                loader=jinja2.FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')))
 
-
+SECRET = "hijhhbodfgnhpsoibnihp$secret$&%^*"
 vendor_pass = "$108vendor$"
+total_logged_in = 0
+current_bucket = -1
+
+
+def make_salt():
+    return ''.join(random.choice(string.letters) for x in xrange(5))
+
+
+def make_user_cookie(user_val):
+    return "%s|%s" % (str(user_val), str(hmac.new(SECRET, str(user_val)).hexdigest()))
+
+
+def check_valid_cookie(test_cookie):
+    user_val = test_cookie.split('|')[0]
+    if make_user_cookie(user_val) == test_cookie:
+        return True
+    else:
+        return False
+
+
+def create_pass_hash(pwd, name):
+    salt = make_salt()
+    h = hashlib.sha256(name + pwd + salt).hexdigest()
+    return "%s,%s" % (h, salt)
+
+
+def check_valid_pass(pass_val, pass_hash, username):
+    h = hashlib.sha256(username + pass_val + pass_hash.split(',')[1]).hexdigest()
+    if h == pass_hash.split(',')[0]:
+        return True
+    else:
+        return False
+
 
 class Handler(webapp2.RequestHandler):
     def write(self, *a, **kw):
@@ -67,6 +104,29 @@ class RequestNew(db.Model):
     address = db.StringProperty(required=True)
 
 
+class CallCentrePerson(db.Model):
+    name = db.StringProperty(required=True)
+    pw_hash = db.StringProperty(required=True)
+    email = db.StringProperty(required=True)
+
+    @classmethod
+    def by_name(cls, name):
+        u = CallCentrePerson.all().filter('name=', name).get()
+        return u
+
+
+class CurrentLoggedIn(db.Model):
+    id = db.StringProperty(required=True)
+    time = db.DateTimeProperty(auto_now_add=True)
+
+
+class MappingRequests(db.Model):
+    user_id = db.StringProperty(required=True)
+    request_id = db.StringProperty(required=True)
+    marked = db.StringProperty(required=True)
+    time = db.DateTimeProperty(auto_now_add=True)
+
+
 class MainHandler(Handler):
     def get(self):
         all_data = db.GqlQuery("select * from RequestNew order by date desc")
@@ -81,16 +141,16 @@ class MainHandler(Handler):
 def get_address_from_coordinates(lat, lon):
     base_url = "https://maps.googleapis.com/maps/api/geocode/json?sensor=true&key=AIzaSyCYm1G4k9BaFfR7SodrKld5edoZehubg9M&latlng="
     url = base_url + str(lat) + "," + str(lon)
-    logging.error(" in function  "+url)
+    logging.error(" in function  " + url)
     response = None
     try:
         response = urllib2.urlopen(url).read()
-        logging.error(" in function  "+response)
+        logging.error(" in function  " + response)
         dictionary = json.loads(response)
         results = dictionary["results"]
         first_dict = results[0]
         formatted_address = first_dict["formatted_address"]
-        logging.error(" in function  "+formatted_address)
+        logging.error(" in function  " + formatted_address)
         return formatted_address
     except:
         return "could not connect to google maps api"
@@ -148,13 +208,24 @@ class SendRequestHandler(Handler):
         smsnumber = "[NO]--[DIRECT]"
         pending = "1"
         address = get_address_from_coordinates(lattitude, longitude)
-        logging.error("inside send handler   "+address)
+        logging.error("inside send handler   " + address)
         # self.response.out.write(type+injured+lattitude+longitude+name+phone)
         log_message = ""
         all_request = db.GqlQuery("select * from RequestNew")
         found = False
         for i in all_request:
             if i.phone == phone:
+                global total_logged_in
+                global current_bucket
+                request_id_to_update = str(i.key().id())
+                user_id_to_update = "None"
+                all_mappings = db.GqlQuery("select * from MappingRequests")
+                for x in all_mappings:
+                    if x.request_id == request_id_to_update:
+                        user_id_to_update = str(x.user_id)
+                        x.delete()
+                        break
+
                 i.delete()
                 updated_request = RequestNew(type=type,
                                              injured=injured,
@@ -167,6 +238,10 @@ class SendRequestHandler(Handler):
                                              address=address
                                              )
                 updated_request.put()
+                updated_request_id = str(updated_request.key().id())
+                map_request = MappingRequests(user_id=user_id_to_update, request_id=updated_request_id, marked="0")
+                map_request.put()
+                logging.error(str(map_request.key().id()))
                 found = True
                 log_message = "duplicate message found" + '\n' + type + '\n' + injured + \
                               '\n' + lattitude + '\n' + longitude + '\n' + name + '\n' + phone + '\n' + pending + '\n' \
@@ -185,6 +260,21 @@ class SendRequestHandler(Handler):
                                  address=address
                                  )
             request.put()
+            global total_logged_in
+            global current_bucket
+            if total_logged_in > 0:
+                request_id = str(request.key().id())
+                all_logged_in = db.GqlQuery("select * from CurrentLoggedIn order by time asc")
+                row = all_logged_in[current_bucket]
+                user_id = str(row.key().id())
+                logging.error("user ID  " + str(user_id))
+                current_bucket += 1
+                if current_bucket == total_logged_in:
+                    current_bucket = 0
+                logging.error("total logged in " + str(total_logged_in) + '\n' + "current bucket " + str(current_bucket))
+                map_request = MappingRequests(user_id=user_id, request_id=request_id, marked="0")
+                map_request.put()
+                logging.error(str(map_request.key().id()))
             log_message = "new message" + '\n' + type + '\n' + injured + \
                           '\n' + lattitude + '\n' + longitude + '\n' + name + '\n' + phone + '\n' + pending + '\n' \
                           + smsnumber
@@ -211,6 +301,16 @@ class SmsHandler(Handler):
         found = False
         for i in all_request:
             if i.phone == phone:
+                global total_logged_in
+                global current_bucket
+                request_id_to_update = str(i.key().id())
+                user_id_to_update = "None"
+                all_mappings = db.GqlQuery("select * from MappingRequests")
+                for x in all_mappings:
+                    if x.request_id == request_id_to_update:
+                        user_id_to_update = str(x.user_id)
+                        x.delete()
+                        break
                 i.delete()
                 updated_request = RequestNew(type=type,
                                              injured=injured,
@@ -223,6 +323,10 @@ class SmsHandler(Handler):
                                              address=address
                                              )
                 updated_request.put()
+                updated_request_id = str(updated_request.key().id())
+                map_request = MappingRequests(user_id=user_id_to_update, request_id=updated_request_id, marked="0")
+                map_request.put()
+                logging.error(str(map_request.key().id()))
                 found = True
                 log_message = "duplicate message/number found but updated" + '\n' + type + '\n' + injured + \
                               '\n' + lattitude + '\n' + longitude + '\n' + name + '\n' + phone + '\n' + pending + '\n' \
@@ -240,6 +344,21 @@ class SmsHandler(Handler):
                                  address=address
                                  )
             request.put()
+            global total_logged_in
+            global current_bucket
+            if total_logged_in > 0:
+                request_id = str(request.key().id())
+                all_logged_in = db.GqlQuery("select * from CurrentLoggedIn order by time asc")
+                row = all_logged_in[current_bucket]
+                user_id = str(row.key().id())
+                logging.error(str(user_id))
+                current_bucket += 1
+                if current_bucket == total_logged_in:
+                    current_bucket = 0
+                logging.error("total logged in " + str(total_logged_in) + '\n' + "current bucket " + str(current_bucket))
+                map_request = MappingRequests(user_id=user_id, request_id=request_id, marked="0")
+                map_request.put()
+                logging.error(str(map_request.key().id()))
             log_message = "new message/number found--- INSERTED" + '\n' + type + '\n' + injured + \
                           '\n' + lattitude + '\n' + longitude + '\n' + name + '\n' + phone + '\n' + pending + '\n' \
                           + sms_number
@@ -358,7 +477,7 @@ class ServiceCompleteHandler(Handler):
         phone = self.request.get("phone")
         password = self.request.get("password")
         if password == vendor_pass:
-            self.redirect("/requestcomplete?phone="+phone)
+            self.redirect("/requestcomplete?phone=" + phone)
         else:
             self.response.out.write("Invalid Vendor Password!")
 
@@ -370,11 +489,11 @@ class PrivatePlacesHandler(Handler):
         user_lng = self.request.get("lng")
         URL = ""
         if type == "MEDICAL EMERGENCY":
-            URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?rankBy=distance&keyword=ambulance&key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&location="+user_lat+","+user_lng
+            URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?rankBy=distance&keyword=ambulance&key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&location=" + user_lat + "," + user_lng
         if type == "FIRE EMERGENCY":
-            URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?rankBy=distance&keyword=fire%20station&key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&location="+user_lat+","+user_lng
+            URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?rankBy=distance&keyword=fire%20station&key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&location=" + user_lat + "," + user_lng
         if type == "CRIME EMERGENCY":
-            URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?rankBy=distance&keyword=police&key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&location="+user_lat+","+user_lng
+            URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?rankBy=distance&keyword=police&key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&location=" + user_lat + "," + user_lng
         x = requests.get(URL)
         x = x.text
         x = json.loads(x)
@@ -389,14 +508,15 @@ class PrivatePlacesHandler(Handler):
             placeID = i["place_id"]
             address = i["vicinity"]
             name = i["name"]
-            place_details_url = "https://maps.googleapis.com/maps/api/place/details/json?key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&placeid="+placeID
+            place_details_url = "https://maps.googleapis.com/maps/api/place/details/json?key=AIzaSyD-Tp_QBh58mlcEmSaeD4ii48X5wHWU7sI&placeid=" + placeID
             place_details = requests.get(place_details_url)
             place_details = json.loads(place_details.text)
             try:
                 phone_number = place_details["result"]["international_phone_number"]
             except:
                 phone_number = "Could not find!!"
-            maps_distance_url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=metric&key=AIzaSyCs_p6e1Od8lpXiEnTa2H9QxkhLOZxmefQ&origins="+usr_lat+","+usr_lng+"&destinations="+str(lat)+","+str(lng)
+            maps_distance_url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=metric&key=AIzaSyCs_p6e1Od8lpXiEnTa2H9QxkhLOZxmefQ&origins=" + usr_lat + "," + usr_lng + "&destinations=" + str(
+                lat) + "," + str(lng)
             distance_details = requests.get(maps_distance_url)
             distance_details = json.loads(distance_details.text)
             rows = distance_details["rows"][0]
@@ -422,6 +542,232 @@ class SearchNearbyHandler(Handler):
         self.render("googleplaces.html")
 
 
+USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
+
+
+def valid_username(username):
+    if username and USER_RE.match(username):
+        return True
+    else:
+        return False
+
+
+PASS_RE = re.compile(r"^.{3,20}$")
+
+
+def valid_pass(passw):
+    if passw and PASS_RE.match(passw):
+        return True
+    else:
+        return False
+
+
+EMAIL_RE = re.compile(r"^[\S]+@[\S]+.[\S]+$")
+
+
+def valid_email(email):
+    if email and EMAIL_RE.match(email):
+        return True
+    else:
+        return False
+
+
+class LoginHandler(Handler):
+    def render_form(self, username_value="", username_error="", pass_val="", pass_error=""):
+        self.render("login.html", username_value=username_value, username_error=username_error, pass_value=pass_val,
+                    pass_error=pass_error)
+
+    def get(self):
+        user_id = self.request.cookies.get("user_id", "0")
+        if user_id != "0":
+            if check_valid_cookie(user_id) == True:
+                self.redirect('/personpending')
+            else:
+                self.render_form()
+        else:
+            self.render_form()
+
+    def post(self):
+        username = self.request.get("username")
+        passw = self.request.get("passw")
+        username_error = ""
+        pass_error = ""
+        is_error = False
+        all = db.GqlQuery("select * from CallCentrePerson")
+        test_global = ""
+
+        if username:
+            all = db.GqlQuery("select * from CallCentrePerson")
+            is_valid_name = False
+            for i in all:
+                if i.name == username:
+                    test_global = i
+                    is_valid_name = True
+                    break
+            if is_valid_name == False:
+                username_error = "Invalid Username"
+                is_error = True
+        else:
+            is_error = True
+            username_error = "Invalid Username"
+
+        if is_error == True:
+            self.render_form(username, username_error, passw)
+
+        else:
+            if passw:
+                actual_pass = test_global.pw_hash
+                ans = check_valid_pass(passw, actual_pass, username)
+                if ans == False:
+                    pass_error = "Password does'nt match !!"
+                    is_error = True
+
+            if is_error == True:
+                self.render_form(username, username_error, passw, pass_error)
+            else:
+                id = test_global.key().id()
+                cookie = make_user_cookie(id)
+                self.response.headers.add_header('Set-Cookie', "user_id=%s" % str(cookie))
+                logged_in = CurrentLoggedIn(id=str(id))
+                logged_in.put()
+                global total_logged_in
+                global current_bucket
+                if total_logged_in == 0:
+                    current_bucket = 0
+                total_logged_in += 1
+                self.redirect('/personpending')
+
+
+class SignupHandler(Handler):
+    def render_front(self, username_value="", username_error="", pass_value="", pass_error="", verifypass_value="",
+                     verifypass_error="", email_value="", email_error="", wrong_passphrase=""):
+        self.render("signup.html", username_value=username_value, username_error=username_error,
+                    pass_value=pass_value, pass_error=pass_error, verifypass_value=verifypass_value,
+                    verifypass_error=verifypass_error, email_value=email_value, email_error=email_error,
+                    wrong_passphrase=wrong_passphrase)
+
+    def get(self):
+        self.render_front()
+
+    def post(self):
+        is_error = False
+        username = self.request.get("username")
+        passw = self.request.get("pass")
+        verify_pass = self.request.get("verify_pass")
+        email = self.request.get("email")
+        passphrase = self.request.get("passphrase")
+        username_error = ""
+        pass_error = ""
+        verifypass_error = ""
+        email_error = ""
+        wrong_passphrase = ""
+        if username:
+            if valid_username(username) == False:
+                is_error = True
+                username_error = "That's not a valid username"
+        else:
+            is_error = True
+            username_error = "username cant be empty"
+
+        if is_error == False:
+            all = db.GqlQuery("select * from CallCentrePerson")
+            for i in all:
+                if i.name == username:
+                    is_error = True
+                    username_error = "username already exists !!"
+
+        if passw:
+            if valid_pass(passw) == False:
+                is_error = True
+                pass_error = "Your password isn't strong enough !!"
+        else:
+            is_error = True
+            pass_error = "pass cant be empty"
+
+        if valid_pass(passw) == True:
+            if (verify_pass != passw):
+                is_error = True
+                verifypass_error = "Passwords Don't match"
+
+        if (email):
+            if (valid_email(email) == False):
+                is_error = True
+                email_error = "Invalid Email address"
+        else:
+            is_error = True
+            email_error = "Email cant be empty"
+
+        if (passphrase != "$108callcentre$"):
+            is_error = True
+            wrong_passphrase = "Passphrase entered is wrong!!"
+
+        if (is_error == True):
+            self.render_front(username, username_error, passw,
+                              pass_error, verify_pass,
+                              verifypass_error, email, email_error, wrong_passphrase)
+        else:
+            pass_hash = create_pass_hash(passw, username)
+            row = CallCentrePerson(name=username, pw_hash=pass_hash, email=email)
+            row.put()
+            id = row.key().id()
+            cookie = make_user_cookie(id)
+            self.response.headers.add_header('Set-Cookie', "user_id=%s" % str(cookie))
+            logged_in = CurrentLoggedIn(id=str(id))
+            logged_in.put()
+            global total_logged_in
+            global current_bucket
+            if total_logged_in == 0:
+                current_bucket = 0
+            total_logged_in += 1
+            self.redirect('/personpending')
+
+
+class LogoutHandler(Handler):
+    def get(self):
+        id_cookie = self.request.cookies.get("user_id", "0")
+        if id_cookie != "0":
+            id = id_cookie.split('|')[0]
+            all = db.GqlQuery("select * from CurrentLoggedIn")
+            for i in all:
+                if i.id == id:
+                    i.delete()
+                    global total_logged_in
+                    if total_logged_in > 0:
+                        total_logged_in -= 1
+                    if total_logged_in < 0:
+                        total_logged_in = 0
+                    if total_logged_in == 0:
+                        global current_bucket
+                        current_bucket = -1
+                    break
+        self.response.headers.add_header('Set-Cookie', "user_id=%s" % str(""))
+        self.redirect('/')
+
+
+class PersonPendingHandler(Handler):
+    def get(self):
+        user_id = self.request.cookies.get("user_id", "0")
+        global total_logged_in
+        global current_bucket
+        logging.error("total persons =" + str(total_logged_in) + '\n' + "current bucket = " + str(current_bucket))
+        if user_id == "0":
+            self.redirect('/')
+        if check_valid_cookie(user_id) == True:
+            user_id = user_id.split("|")[0]
+            all_mappings = db.GqlQuery("select * from MappingRequests order by time desc")
+            list_of_results = []
+            for i in all_mappings:
+                key = db.Key.from_path('CurrentLoggedIn', int(i.user_id))
+                logged_in = db.get(key)
+                if logged_in.id == user_id:
+                    key = db.Key.from_path('RequestNew', int(i.request_id))
+                    request = db.get(key)
+                    list_of_results.append(request)
+            self.render("person.html", mappings=all_mappings, list_of_results=list_of_results)
+        else:
+            self.redirect('/login')
+
+
 app = webapp2.WSGIApplication([
     ('/', MainHandler),
     ('/register', RegisterHandler),
@@ -434,5 +780,9 @@ app = webapp2.WSGIApplication([
     ('/registeredplacescompute', RegisteredPlacesComputationHandler),
     ('/vendorservicecomplete', ServiceCompleteHandler),
     ('/privateplaces', PrivatePlacesHandler),
-    ("/searchnearby", SearchNearbyHandler)
+    ("/searchnearby", SearchNearbyHandler),
+    ('/login', LoginHandler),
+    ('/signup', SignupHandler),
+    ('/logout', LogoutHandler),
+    ('/personpending', PersonPendingHandler)
 ], debug=True)

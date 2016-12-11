@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Person</title>
+</head>
+<body>
+<h1>HIIIIIIIIIIII!!!</h1>
+{%for i in list_of_results%}
+    <h3>{{i.type}}</h3>
+<ul>
+    <li>
+        <h4>NAME: {{i.name}}</h4>
+    </li>
+    <li>
+        <h4>NUMBER OF INJURED PEOPLE: {{i.injured}}</h4>
+    </li>
+    <li>
+        <h4>PHONE 1: {{i.phone}}</h4>
+    </li>
+    <li>
+        <h4>PHONE 2: {{i.sms_number}}</h4>
+    </li>
+    <li>
+        <h4>ADDRESS: {{i.address}}</h4>
+    </li>
+    <li>
+        <h4><a href="http://maps.google.com/maps?q=loc:{{i.latitude}},{{i.longitude}}">LOCATE ON MAP</a></h4>
+    </li>
+    <li>
+        <h4>DATE TIME (YYYY-MM-DD HH:MM:SS): {{i.date}}</h4>
+    </li>
+    <li>
+        <h4><a href="https://backend-108.appspot.com/registeredplaces?lat={{i.latitude}}&lng={{i.longitude}}">NEARBY
+            REGISTERED AMBULANCES</a></h4>
+    </li>
+    <li>
+        <h4>
+            <a href="https://backend-108.appspot.com/searchnearby?lat={{i.latitude}}&lng={{i.longitude}}&type={{i.type}}">SEARCH
+                NEARBY PLACES</a></h4>
+    </li>
+</ul>
+<hr>
+
+{%endfor%}
+</body>
+</html>
