@@ -9,12 +9,19 @@ handlers:
   static_files: favicon.ico
   upload: favicon\.ico
 
+- url: /bootstrap
+  static_dir: bootstrap
+
+- url: /firebase-messaging-sw.js
+  static_files: firebase-messaging-sw.js
+  upload: firebase-messaging-sw.js
+
 - url: .*
   script: main.app
 
 libraries:
 - name: webapp2
-  version: "2.5.2"
+  version: latest
 - name: jinja2
   version: latest
 - name: ssl

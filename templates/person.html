@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Person</title>
+    <link rel="manifest" href="/bootstrap/manifest/manifest.json">
 </head>
 <body>
 <h1>HIIIIIIIIIIII!!!</h1>
@@ -41,7 +42,34 @@
     </li>
 </ul>
 <hr>
-
 {%endfor%}
+
+<script src="https://www.gstatic.com/firebasejs/3.6.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/3.6.1/firebase-messaging.js"></script>
+<script src="https://www.gstatic.com/firebasejs/3.6.3/firebase.js"></script>
+<script>
+  // Initialize Firebase
+  var config = {
+    apiKey: "AIzaSyAW6A0sHVsM2GDg8aCps3fkvL-6oFkzzsU",
+    authDomain: "backend-108.firebaseapp.com",
+    databaseURL: "https://backend-108.firebaseio.com",
+    storageBucket: "backend-108.appspot.com",
+    messagingSenderId: "467653905030"
+  };
+  firebase.initializeApp(config);
+
+    const messaging = firebase.messaging();
+    messaging.requestPermission()
+            .then(function(){
+                console.log("GRANTED");
+                return messaging.getToken();
+            })
+            .then(function(token){
+                console.log(token);
+            })
+            .catch(function(err){
+                console.log('Error Occurred.')
+            })
+</script>
 </body>
 </html>
