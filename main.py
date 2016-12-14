@@ -127,6 +127,11 @@ class MappingRequests(db.Model):
     time = db.DateTimeProperty(auto_now_add=True)
 
 
+class WebToken(db.Model):
+    user_id = db.StringProperty(required=True)
+    token = db.StringProperty(required=True)
+
+
 class MainHandler(Handler):
     def get(self):
         all_data = db.GqlQuery("select * from RequestNew order by date desc")
@@ -183,7 +188,7 @@ class SendHandler(Handler):
             "message": "yolo"
         }
         headers = {"Content-Type": "application/json",
-                   "Authorization": "key=AIzaSyCtgWcLXQadrtVjB_Dp_wWhzQhiK1FHd4c"}
+                   "Authorization": "key=AAAAbOJYSoY:APA91bFyYWQMCPuS49DHzahcFPwIUEc05wQjNh2x1d8q0m41b3AxAeLR4SFHDtZa4IotD8rYFrNAhvSoazfZ6KzMFMkXqYCtRiQaQ16vmDz72CrYMmckz377ieIsS6GPwvw1lgC16qtYZtCJKvj5opY_lNgN1fXEiA"}
         token_list = []
         all_data = db.GqlQuery("select * from Token")
         for i in all_data:
@@ -266,6 +271,7 @@ class SendRequestHandler(Handler):
                 request_id = str(request.key().id())
                 all_logged_in = db.GqlQuery("select * from CurrentLoggedIn order by time asc")
                 row = all_logged_in[current_bucket]
+                call_centre_person_id = row.id
                 user_id = str(row.key().id())
                 logging.error("user ID  " + str(user_id))
                 current_bucket += 1
@@ -274,6 +280,14 @@ class SendRequestHandler(Handler):
                 logging.error("total logged in " + str(total_logged_in) + '\n' + "current bucket " + str(current_bucket))
                 map_request = MappingRequests(user_id=user_id, request_id=request_id, marked="0")
                 map_request.put()
+                #send notification to the specific person
+                all_web_tokens = db.GqlQuery("select * from WebToken")
+                for i in all_web_tokens:
+                    if i.user_id == call_centre_person_id:
+                        link = "https://backend-108.appspot.com/sendwebnot?token=" + i.token
+                        requests.get(link)
+                        break
+                #end of specific notification
                 logging.error(str(map_request.key().id()))
             log_message = "new message" + '\n' + type + '\n' + injured + \
                           '\n' + lattitude + '\n' + longitude + '\n' + name + '\n' + phone + '\n' + pending + '\n' \
@@ -350,6 +364,7 @@ class SmsHandler(Handler):
                 request_id = str(request.key().id())
                 all_logged_in = db.GqlQuery("select * from CurrentLoggedIn order by time asc")
                 row = all_logged_in[current_bucket]
+                call_centre_person_id = row.id
                 user_id = str(row.key().id())
                 logging.error(str(user_id))
                 current_bucket += 1
@@ -358,6 +373,14 @@ class SmsHandler(Handler):
                 logging.error("total logged in " + str(total_logged_in) + '\n' + "current bucket " + str(current_bucket))
                 map_request = MappingRequests(user_id=user_id, request_id=request_id, marked="0")
                 map_request.put()
+                # send notification to the specific person
+                all_web_tokens = db.GqlQuery("select * from WebToken")
+                for i in all_web_tokens:
+                    if i.user_id == call_centre_person_id:
+                        link = "https://backend-108.appspot.com/sendwebnot?token=" + i.token
+                        requests.get(link)
+                        break
+                # end of specific notification
                 logging.error(str(map_request.key().id()))
             log_message = "new message/number found--- INSERTED" + '\n' + type + '\n' + injured + \
                           '\n' + lattitude + '\n' + longitude + '\n' + name + '\n' + phone + '\n' + pending + '\n' \
@@ -756,16 +779,118 @@ class PersonPendingHandler(Handler):
             user_id = user_id.split("|")[0]
             all_mappings = db.GqlQuery("select * from MappingRequests order by time desc")
             list_of_results = []
+            list_of_marked = []
+            list_of_mapping_id = []
             for i in all_mappings:
                 key = db.Key.from_path('CurrentLoggedIn', int(i.user_id))
                 logged_in = db.get(key)
                 if logged_in.id == user_id:
                     key = db.Key.from_path('RequestNew', int(i.request_id))
                     request = db.get(key)
+                    list_of_marked.append(int(i.marked))
                     list_of_results.append(request)
-            self.render("person.html", mappings=all_mappings, list_of_results=list_of_results)
+                    list_of_mapping_id.append(str(i.key().id()))
+            key = db.Key.from_path('CallCentrePerson', int(user_id))
+            person = db.get(key)
+            name = person.name
+            self.render("person.html", list_of_marked=list_of_marked, list_of_results=list_of_results, name=name, list_of_mapping_id=list_of_mapping_id)
         else:
             self.redirect('/login')
+
+
+class SaveWebTokenHandler(Handler):
+    def get(self):
+        token = self.request.get("token")
+        user_id = self.request.get("id")
+        all_tokens = db.GqlQuery("select * from WebToken")
+        for i in all_tokens:
+            if i.user_id == user_id:
+                i.delete()
+                break
+        new_web_token = WebToken(user_id=user_id, token=token)
+        new_web_token.put()
+        self.response.out.write("request success!!")
+
+
+class TestWebHandler(Handler):
+    def get(self):
+        url = 'https://fcm.googleapis.com/fcm/send'
+        body = {
+            "notification": {
+                "title": "New Incoming notification",
+                "body": "Please reload page",
+                "click_action": "https://backend-108.appspot.com/personpending"
+            }
+        }
+        headers = {"Content-Type": "application/json",
+                   "Authorization": "key=AAAAbOJYSoY:APA91bFyYWQMCPuS49DHzahcFPwIUEc05wQjNh2x1d8q0m41b3AxAeLR4SFHDtZa4IotD8rYFrNAhvSoazfZ6KzMFMkXqYCtRiQaQ16vmDz72CrYMmckz377ieIsS6GPwvw1lgC16qtYZtCJKvj5opY_lNgN1fXEiA"}
+        token_list = []
+        all_data = db.GqlQuery("select * from WebToken")
+        for i in all_data:
+            token_list.append(i.token)
+        # self.response.out.write(str(token_list))
+        body["registration_ids"] = token_list
+        logging.error(json.dumps(body))
+        x = requests.post(url, data=json.dumps(body), headers=headers)
+        self.response.out.write(str(x.text))
+
+
+class SendWebNotificationHandler(Handler):
+    def get(self):
+        token = self.request.get("token")
+        url = 'https://fcm.googleapis.com/fcm/send'
+        body = {
+            "notification": {
+                "title": "New Incoming notification",
+                "body": "Please reload page",
+                "click_action": "https://backend-108.appspot.com/personpending"
+            }
+        }
+        headers = {"Content-Type": "application/json",
+                   "Authorization": "key=AAAAbOJYSoY:APA91bFyYWQMCPuS49DHzahcFPwIUEc05wQjNh2x1d8q0m41b3AxAeLR4SFHDtZa4IotD8rYFrNAhvSoazfZ6KzMFMkXqYCtRiQaQ16vmDz72CrYMmckz377ieIsS6GPwvw1lgC16qtYZtCJKvj5opY_lNgN1fXEiA"}
+        token_list = []
+        token_list.append(token)
+        # self.response.out.write(str(token_list))
+        body["registration_ids"] = token_list
+        logging.error(json.dumps(body))
+        x = requests.post(url, data=json.dumps(body), headers=headers)
+        self.response.out.write(str(x.text))
+
+
+class MarkedHandler(Handler):
+    def get(self):
+        type = self.request.get("type")
+        id = self.request.get("id")
+        if type == "1":
+            key = db.Key.from_path('MappingRequests', int(id))
+            mapping = db.get(key)
+            user_id = mapping.user_id
+            request_id = mapping.request_id
+            time = mapping.time
+            mapping.delete()
+            x = MappingRequests(user_id=user_id, request_id=request_id, time=time, marked="1")
+            x.put()
+        elif type == "0":
+            key = db.Key.from_path('MappingRequests', int(id))
+            mapping = db.get(key)
+            user_id = mapping.user_id
+            request_id = mapping.request_id
+            time = mapping.time
+            mapping.delete()
+            x = MappingRequests(user_id=user_id, request_id=request_id, time=time, marked="0")
+            x.put()
+        self.redirect("/personpending")
+
+
+class AllCompletedRequestsHandler(Handler):
+    def get(self):
+        all_data = db.GqlQuery("select * from RequestNew order by date desc")
+        self.render("completed.html", all_data=all_data)
+
+    def post(self):
+        phone = self.request.get("search")
+        all_data = db.GqlQuery("select * from RequestNew order by date desc")
+        self.render("search.html", all_data=all_data, phone=phone)
 
 
 app = webapp2.WSGIApplication([
@@ -784,5 +909,10 @@ app = webapp2.WSGIApplication([
     ('/login', LoginHandler),
     ('/signup', SignupHandler),
     ('/logout', LogoutHandler),
-    ('/personpending', PersonPendingHandler)
+    ('/personpending', PersonPendingHandler),
+    ('/savewebtoken', SaveWebTokenHandler),
+    ('/testweb', TestWebHandler),
+    ('/sendwebnot', SendWebNotificationHandler),
+    ('/marked', MarkedHandler),
+    ('/completed', AllCompletedRequestsHandler)
 ], debug=True)

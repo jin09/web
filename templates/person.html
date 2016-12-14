@@ -4,12 +4,68 @@
     <meta charset="UTF-8">
     <title>Person</title>
     <link rel="manifest" href="/bootstrap/manifest/manifest.json">
+    <meta name="viewport" content="initial-scale=1.0">
+    <style>
+        .done{
+            color: deepskyblue;
+        }
+        /* Always set the map height explicitly to define the size of the div
+         * element that contains the map. */
+        #map {
+            height: 40%;
+        }
+
+        /* Optional: Makes the sample page fill the window. */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
 </head>
 <body>
-<h1>HIIIIIIIIIIII!!!</h1>
+<div id="map"></div>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAysd2yJROGNUyBFzoFc5ZIQnW9XLgGYhc&callback=initMap"
+        async defer></script>
+
+<script>
+    var map;
+    var locations = [
+    {% for i in list_of_results %}
+    ['{{i.name}}', {{i.latitude}},{{i.longitude}}],
+    {% endfor %} ];
+
+    function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: {lat: 13.11083, lng: 80.26087},
+            zoom: 4
+        });
+        var infowindow = new google.maps.InfoWindow();
+
+        var marker, i;
+
+        for (i = 0; i < locations.length; i++) {
+            marker = new google.maps.Marker({
+                position: new google.maps.LatLng(locations[i][1], locations[i][2]),
+                map: map
+            });
+
+            google.maps.event.addListener(marker, 'click', (function (marker, i) {
+                return function () {
+                    infowindow.setContent(locations[i][0]);
+                    infowindow.open(map, marker);
+                }
+            })(marker, i));
+        }
+    }
+</script>
+<h1>WELCOME {{name}} ! This is a list of your pending requests </h1>
+{% set x = 0 %}
 {%for i in list_of_results%}
-    <h3>{{i.type}}</h3>
-<ul>
+<h3>{{i.type}}</h3>
+<ul {%if list_of_marked[x] == 1%}
+    class="done"
+{%endif%}>
     <li>
         <h4>NAME: {{i.name}}</h4>
     </li>
@@ -40,36 +96,79 @@
             <a href="https://backend-108.appspot.com/searchnearby?lat={{i.latitude}}&lng={{i.longitude}}&type={{i.type}}">SEARCH
                 NEARBY PLACES</a></h4>
     </li>
+    <li>
+        <h4><a href="https://backend-108.appspot.com/marked?type=1&id={{list_of_mapping_id[x]}}">MARK AS DONE</a></h4>
+    </li>
+    <li>
+        <h4><a href="https://backend-108.appspot.com/marked?type=0&id={{list_of_mapping_id[x]}}">MARK AS NOT DONE</a></h4>
+    </li>
 </ul>
 <hr>
+{%set x=x+1%}
 {%endfor%}
 
 <script src="https://www.gstatic.com/firebasejs/3.6.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/3.6.1/firebase-messaging.js"></script>
 <script src="https://www.gstatic.com/firebasejs/3.6.3/firebase.js"></script>
 <script>
-  // Initialize Firebase
-  var config = {
-    apiKey: "AIzaSyAW6A0sHVsM2GDg8aCps3fkvL-6oFkzzsU",
-    authDomain: "backend-108.firebaseapp.com",
-    databaseURL: "https://backend-108.firebaseio.com",
-    storageBucket: "backend-108.appspot.com",
-    messagingSenderId: "467653905030"
-  };
-  firebase.initializeApp(config);
+    // Initialize Firebase
+    var config = {
+        apiKey: "AIzaSyAW6A0sHVsM2GDg8aCps3fkvL-6oFkzzsU",
+        authDomain: "backend-108.firebaseapp.com",
+        databaseURL: "https://backend-108.firebaseio.com",
+        storageBucket: "backend-108.appspot.com",
+        messagingSenderId: "467653905030"
+    };
+    firebase.initializeApp(config);
 
     const messaging = firebase.messaging();
     messaging.requestPermission()
-            .then(function(){
+            .then(function () {
                 console.log("GRANTED");
                 return messaging.getToken();
             })
-            .then(function(token){
+            .then(function (token) {
                 console.log(token);
+                var id = document.cookie.split("|")[0];
+                id = id.split("=")[1]
+
+                // create a new request
+                var request = new XMLHttpRequest();
+
+                //capture the response of the variable
+                request.onreadystatechange = function () {
+                    if (request.readyState === XMLHttpRequest.DONE) {
+                        if (request.status === 200) {
+                            var text = request.responseText;
+                            console.log(text)
+                        }
+                        else {
+                            alert('There was a problem with the request.');
+                        }
+                    }
+                };
+
+                //Make a request
+                var url = "https://backend-108.appspot.com/savewebtoken?token=" + token + "&id=" + id;
+                request.open('GET', url);
+                request.send();
             })
-            .catch(function(err){
+            .catch(function (err) {
                 console.log('Error Occurred.')
-            })
+            });
+
+    messaging.onMessage(function (payload) {
+        console.log("Message received. ", payload);
+        // [START_EXCLUDE]
+        // Update the UI to include the received message.
+        var e = new Notification("New Incoming request! Please reload the page!");
+
+        e.onclick = function(){
+            location.href = "https://backend-108.appspot.com/personpending"
+        };
+        // [END_EXCLUDE]
+    });
+
 </script>
 </body>
 </html>

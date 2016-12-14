@@ -28,13 +28,15 @@
     var map;
     var locations = [
     {% for i in all_data %}
+    {%if i.pending == "1"%}
     ['{{i.name}}', {{i.latitude}},{{i.longitude}}],
+    {%endif%}
     {% endfor %} ];
 
     function initMap() {
         map = new google.maps.Map(document.getElementById('map'), {
             center: {lat: 13.11083, lng: 80.26087},
-            zoom: 5
+            zoom: 4
         });
         var infowindow = new google.maps.InfoWindow();
 

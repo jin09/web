@@ -24,3 +24,15 @@ importScripts('https://www.gstatic.com/firebasejs/3.5.2/firebase-messaging.js');
 // messages.
 const messaging = firebase.messaging();
 // [END initialize_firebase_in_sw]
+
+messaging.setBackgroundMessageHandler(function(payload) {
+  console.log('[firebase-messaging-sw.js] Received background message ', payload);
+  // Customize notification here
+  const notificationTitle = 'New Incoming Request';
+  const notificationOptions = {
+    body: 'Please reload the page!!'
+  };
+
+  return self.registration.showNotification(notificationTitle,
+      notificationOptions);
+});
