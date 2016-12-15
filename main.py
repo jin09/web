@@ -893,6 +893,47 @@ class AllCompletedRequestsHandler(Handler):
         self.render("search.html", all_data=all_data, phone=phone)
 
 
+class SosHandler(Handler):
+    def get(self):
+        self.render("sos.html")
+
+    def post(self):
+        type = self.request.get("type")
+        injured = self.request.get("injured")
+        latitude = self.request.get("lat")
+        longitude = self.request.get("lng")
+        name = self.request.get("name")
+        phone = self.request.get("phone")
+        first_word_type = str(type).split(" ")[0]
+        logging.error(first_word_type)
+        error = 0
+        if name == "":
+            error = 1
+            logging.error(name)
+        if first_word_type == "CRIME" or first_word_type == "MEDICAL" or first_word_type == "FIRE":
+            logging.error(type+"    true")
+        else:
+            error = 1
+            logging.error(type + "    false")
+        if not injured.isdigit():
+            error = 1
+            logging.error(injured)
+        else:
+            if int(injured) < 0:
+                error = 1
+                logging.error(injured+"       2")
+        if len(phone) != 10:
+            error = 1
+            logging.error(phone)
+        error_mssg = "Faulty Input !!"
+        if error == 1:
+            self.render("sos.html", error=error_mssg)
+        else:
+            link = "https://backend-108.appspot.com/sendrequest?type="+type+"&injured="+injured+"&latitude="+latitude+"&longitude="+longitude+"&name="+name+"&phone="+phone
+            logging.error(link)
+            x = requests.get(link)
+            self.response.out.write(x.text)
+
 app = webapp2.WSGIApplication([
     ('/', MainHandler),
     ('/register', RegisterHandler),
@@ -914,5 +955,6 @@ app = webapp2.WSGIApplication([
     ('/testweb', TestWebHandler),
     ('/sendwebnot', SendWebNotificationHandler),
     ('/marked', MarkedHandler),
-    ('/completed', AllCompletedRequestsHandler)
+    ('/completed', AllCompletedRequestsHandler),
+    ('/sos', SosHandler)
 ], debug=True)

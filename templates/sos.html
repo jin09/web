@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EMERGENCY REQUEST</title>
+    <meta name="viewport" content="initial-scale=1.0">
+    <style>
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+<p><b>EMERGENCY REQUEST</b></p>
+
+<form method="post">
+    <label>
+        NAME
+        <input type="text" name="name">
+    </label>
+    <br>
+    <label>
+        NUMBER OF INJURED PEOPLE
+        <input name="injured" type="text">
+    </label>
+    <br>
+    <label>
+        TYPE
+        <select name="type">
+            <option>MEDICAL EMERGENCY</option>
+            <option>CRIME EMERGENCY</option>
+            <option>FIRE EMERGENCY</option>
+        </select>
+    </label>
+    <br>
+    <label>
+        PHONE (10 digit)
+        <input name="phone" type="text">
+    </label>
+    <br>
+    <label>
+        LATITUDE
+        <input type="text" id="lati" disabled>
+    </label>
+    <br>
+    <label>
+        LONGITUDE
+        <input type="text" id="longi" disabled>
+    </label>
+    <br>
+    <input name="lat" type="hidden" id="latitu" >
+    <input name="lng" type="hidden" id="longitu">
+    <input type="submit">
+</form>
+<div id="out"></div>
+<span class="error">{{error}}</span>
+<script type="text/javascript">
+        var output = document.getElementById("out");
+        var lat = document.getElementById("lati");
+        var lng = document.getElementById("longi");
+        var lati = document.getElementById("latitu");
+        var longi = document.getElementById("longitu");
+        if (!navigator.geolocation) {
+            output.innerHTML = "<p>Geolocation is not supported by your browser</p>";
+        }
+
+        function success(position) {
+            var latitude = position.coords.latitude;
+            var longitude = position.coords.longitude;
+            lat.value = latitude;
+            lng.value = longitude;
+            lati.value = latitude;
+            longi.value = longitude;
+        }
+
+        function error() {
+            output.innerHTML = "Unable to retrieve your location";
+        }
+
+        output.innerHTML = "<p>Locating…</p>";
+
+        navigator.geolocation.getCurrentPosition(success, error);
+
+</script>
+</body>
+</html>
