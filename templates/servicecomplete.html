@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Service Completed</title>
+    <style>
+        .error{
+            color: red;
+        }
+    </style>
 </head>
 <body>
     <h1>Service Completed Form</h1>
@@ -10,14 +15,21 @@
     <br>
     <form method="post">
         <label>
-            Phone Number:
+           Vendor Name:
+            <input type="text" name="vendor">
+        </label>
+        <br>
+        <label>
+           Victim Primary Phone Number:
             <input type="text" name="phone">
         </label>
+        <br>
         <label>
             Vendor Password:
             <input type="password" name="password">
         </label>
         <input type="submit">
     </form>
+<span class="error">{{error_mssg}}</span>
 </body>
 </html>

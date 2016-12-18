@@ -136,10 +136,15 @@
                     locationsInner[1] = q[i].lat;
                     locationsInner[2] = q[i].lng;
                     locations.push(locationsInner);
+                    var busy = q[i].marked;
+
                     var inner = "<h3>" + q[i].name + "</h3>" +
                             "<ul>" +
                             "<li>" + "<b>" + "SHORTEST TIME: " + q[i].text + "</b>" + "</li>" +
                             "<li>" + "ADDRESS: " + q[i].addr + "</li>" +
+                                    "<li>" + "BUSY: " + busy + "</li>" +
+                                    "<li>" +"<a href='http://backend-108.appspot.com/markasbusy?name="+q[i].name+"'> mark as busy</a>" + "</li>" +
+                                    "<li>" +"<a href='http://backend-108.appspot.com/markasnotbusy?name="+q[i].name+"'> mark as not busy</a>" + "</li>" +
                             "</ul>" + "<hr>";
                     output += inner;
                 }
