@@ -4,6 +4,7 @@ import requests
 from google.appengine.api import urlfetch
 import urllib2
 import urllib
+#https://drive.google.com/folderview?id=0BxPkptdH01OBdVZaU1dYeGtQNk0
 
 '''
 url = 'https://fcm.googleapis.com/fcm/send'
